@@ -1,25 +1,38 @@
 stages:
   - build
-  - docker
+  - dockerize
+  - deploy
 
-cache:
-  paths:
-    - node_modules/
+variables:
+  DOCKER_IMAGE: $CI_REGISTRY_IMAGE/app:$CI_COMMIT_SHORT_SHA
 
-build-react:
+build:
   stage: build
-  image: node:18-alpine
   script:
-    - npm install --legacy-peer-deps
+    - echo "Building Node + React app"
+    - docker --version
+    - node -v
+    - npm install
     - npm run build
-  artifacts:
-    paths:
-      - build/
+  tags:
+    - shell   # same tag jo runner register karte time diya tha
 
-docker-build:
-  stage: docker
-  image: docker:20.10.16
-  services:
-    - docker:dind
+dockerize:
+  stage: dockerize
   script:
-    - docker build -t my-react-app .
+    - echo "Building Docker Image..."
+    - docker build -t $DOCKER_IMAGE .
+    - echo $CI_JOB_TOKEN | docker login -u gitlab-ci-token --password-stdin $CI_REGISTRY
+    - docker push $DOCKER_IMAGE
+  tags:
+    - shell
+
+deploy:
+  stage: deploy
+  script:
+    - echo "Deploying app on VM..."
+    - docker stop myapp || true
+    - docker rm myapp || true
+    - docker run -d -p 8080:80 --name myapp $DOCKER_IMAGE
+  tags:
+    - shell
